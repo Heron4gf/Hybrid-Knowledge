@@ -21,24 +21,12 @@ async def query_retrieval(
     query: str,
     top_k: int = 5,
 ) -> RetrievalQueryResponse:
-    """Query the retrieval API with the given text.
-    
-    Args:
-        query: The search query
-        top_k: Number of results to retrieve
-        
-    Returns:
-        RetrievalQueryResponse with results
-        
-    Raises:
-        HTTPException: If the retrieval API call fails
-    """
     settings = get_settings()
-    
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
-                f"{settings.retrieval_url}/query",
+                f"{settings.retrieval_url.rstrip('/')}/query",
                 json=RetrievalQueryRequest(query=query, top_k=top_k).model_dump(),
             )
             response.raise_for_status()
@@ -58,7 +46,7 @@ async def query_retrieval(
 @router.post("/chat/completions", response_model=None)
 async def create_chat_completion(request: Request):
     """Create a chat completion with retrieval-augmented context injection.
-    
+
     1. Extracts query from the last user message
     2. Queries the retrieval API
     3. Injects retrieval results as a 'context' message
@@ -66,30 +54,30 @@ async def create_chat_completion(request: Request):
     5. Returns streamed or regular response
     """
     settings = get_settings()
-    
+
     try:
         body = await request.json()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON body: {str(e)}")
-    
+
     messages = body.get("messages", [])
     model = body.get("model", "")
     stream = body.get("stream", False)
-    
+
     if not messages:
         raise HTTPException(status_code=400, detail="messages field is required")
     if not model:
         raise HTTPException(status_code=400, detail="model field is required")
-    
+
     # Step 1: Extract query from last user message
     query = extract_query_from_messages(messages)
-    
+
     if query:
         # Step 2: Query the retrieval API
         top_k = body.get("top_k", 5)
         try:
             retrieval_response = await query_retrieval(query, top_k)
-            
+
             if retrieval_response.results:
                 # Step 3: Build and inject context message
                 context_msg = build_context_message(retrieval_response)
@@ -98,27 +86,32 @@ async def create_chat_completion(request: Request):
         except HTTPException:
             # If retrieval fails, continue without context injection
             pass
-    
-    # Step 4: Forward to upstream API
-    headers = dict(request.headers)
-    headers.pop("host", None)  # Avoid host header issues
-    
+
+    # Step 4: Build upstream headers — always use the configured API key
+    upstream_headers = {
+        "Content-Type": "application/json",
+        "Accept": request.headers.get("accept", "application/json"),
+    }
+    if settings.api_key:
+        upstream_headers["Authorization"] = f"Bearer {settings.api_key}"
+
+    base_url = settings.base_url.rstrip("/")
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             upstream_response = await client.post(
-                f"{settings.base_url}/chat/completions",
+                f"{base_url}/chat/completions",
                 json=body,
-                headers=headers,
+                headers=upstream_headers,
             )
             upstream_response.raise_for_status()
-            
+
             if stream:
-                # Return streaming response
                 async def event_generator():
                     async for line in upstream_response.aiter_lines():
                         if line:
                             yield f"{line}\n"
-                
+
                 return StreamingResponse(
                     event_generator(),
                     media_type="text/event-stream",
@@ -126,7 +119,7 @@ async def create_chat_completion(request: Request):
                 )
             else:
                 return upstream_response.json()
-                
+
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=e.response.status_code,
