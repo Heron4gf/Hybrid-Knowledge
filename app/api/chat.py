@@ -1,5 +1,5 @@
 """Chat completions API router with retrieval injection."""
-import json
+import logging
 from typing import Any, Dict, List
 
 import httpx
@@ -14,19 +14,24 @@ from app.utils.context_injector import (
     inject_context_message,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["chat"])
 
 
-async def query_retrieval(
-    query: str,
-    top_k: int = 5,
-) -> RetrievalQueryResponse:
+async def query_retrieval(query: str, top_k: int = 5) -> RetrievalQueryResponse:
+    """Query the KI-4-KMU retrieval service.
+
+    Raises HTTPException on any failure — retrieval is mandatory in the pipeline.
+    """
     settings = get_settings()
+    retrieval_url = settings.retrieval_url.rstrip("/")
+
+    logger.debug(f"Querying retrieval at {retrieval_url}/query with: {query!r}")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
-                f"{settings.retrieval_url.rstrip('/')}/query",
+                f"{retrieval_url}/query",
                 json=RetrievalQueryRequest(query=query, top_k=top_k).model_dump(),
             )
             response.raise_for_status()
@@ -38,20 +43,20 @@ async def query_retrieval(
             )
         except Exception as e:
             raise HTTPException(
-                status_code=500,
-                detail=f"Failed to query retrieval API: {str(e)}",
+                status_code=502,
+                detail=f"Failed to reach retrieval service ({retrieval_url}): {str(e)}",
             )
 
 
 @router.post("/chat/completions", response_model=None)
 async def create_chat_completion(request: Request):
-    """Create a chat completion with retrieval-augmented context injection.
+    """Create a chat completion following the hybrid retrieval pipeline:
 
-    1. Extracts query from the last user message
-    2. Queries the retrieval API
-    3. Injects retrieval results as a 'context' message
-    4. Forwards the modified request to the upstream API
-    5. Returns streamed or regular response
+    1. Extract query from last user message
+    2. Query the KI-4-KMU retrieval service (mandatory)
+    3. Inject retrieved context as a system message
+    4. Forward enriched messages to the upstream LLM
+    5. Return the response (streaming or standard)
     """
     settings = get_settings()
 
@@ -60,9 +65,9 @@ async def create_chat_completion(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON body: {str(e)}")
 
-    messages = body.get("messages", [])
-    model = body.get("model", "")
-    stream = body.get("stream", False)
+    messages: List[Dict[str, Any]] = body.get("messages", [])
+    model: str = body.get("model", "")
+    stream: bool = body.get("stream", False)
 
     if not messages:
         raise HTTPException(status_code=400, detail="messages field is required")
@@ -73,21 +78,18 @@ async def create_chat_completion(request: Request):
     query = extract_query_from_messages(messages)
 
     if query:
-        # Step 2: Query the retrieval API
+        # Step 2 & 3: Retrieve context and inject — mandatory per pipeline architecture
         top_k = body.get("top_k", 5)
-        try:
-            retrieval_response = await query_retrieval(query, top_k)
+        retrieval_response = await query_retrieval(query, top_k)
 
-            if retrieval_response.results:
-                # Step 3: Build and inject context message
-                context_msg = build_context_message(retrieval_response)
-                modified_messages = inject_context_message(messages, context_msg)
-                body["messages"] = modified_messages
-        except HTTPException:
-            # If retrieval fails, continue without context injection
-            pass
+        if retrieval_response.results:
+            context_msg = build_context_message(retrieval_response)
+            body["messages"] = inject_context_message(messages, context_msg)
+            logger.debug(f"Injected {len(retrieval_response.results)} retrieval results into context")
+        else:
+            logger.debug("Retrieval returned no results, proceeding without context injection")
 
-    # Step 4: Build upstream headers — always use the configured API key
+    # Step 4: Forward to upstream LLM
     upstream_headers = {
         "Content-Type": "application/json",
         "Accept": request.headers.get("accept", "application/json"),
@@ -96,6 +98,7 @@ async def create_chat_completion(request: Request):
         upstream_headers["Authorization"] = f"Bearer {settings.api_key}"
 
     base_url = settings.base_url.rstrip("/")
+    logger.debug(f"Forwarding to upstream: {base_url}/chat/completions")
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
@@ -106,6 +109,7 @@ async def create_chat_completion(request: Request):
             )
             upstream_response.raise_for_status()
 
+            # Step 5: Return response
             if stream:
                 async def event_generator():
                     async for line in upstream_response.aiter_lines():

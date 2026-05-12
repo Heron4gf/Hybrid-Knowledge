@@ -3,6 +3,12 @@ services:
     build: .
     env_file: .env
     restart: unless-stopped
+    environment:
+      # Override retrieval URL to use Docker host so the backend
+      # can reach the KI-4-KMU retrieval service running on the host machine.
+      - RETRIEVAL_URL=http://host.docker.internal:8001/v1
+    extra_hosts:
+      - host.docker.internal:host-gateway
     networks:
       - app-network
 
