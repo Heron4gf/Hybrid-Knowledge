@@ -1,0 +1,377 @@
+openapi: 3.0.0
+info:
+  title: Chatbot Proxy API
+  version: "1.0"
+  description: OpenAI-compatible proxy server with retrieval-augmented context injection
+
+servers:
+  - url: http://localhost:8000
+
+paths:
+  /v1/chat/completions:
+    post:
+      summary: Create chat completion
+      description: >
+        Creates a model response for the given chat conversation with retrieval-augmented context injection.
+        Before forwarding to the upstream API, it queries the retrieval engine and injects results as a context message.
+      operationId: createChatCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChatCompletionRequest"
+      responses:
+        "200":
+          description: Successful chat completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletion"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ChatCompletionChunk"
+
+  /v1/models:
+    get:
+      summary: List models
+      description: >
+        Lists the currently available models by proxying to the upstream API.
+      operationId: listModels
+      responses:
+        "200":
+          description: List of models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the API
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  base_url:
+                    type: string
+
+components:
+  schemas:
+    CreateChatCompletionRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: ID of the model to use
+        messages:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+        top_p:
+          type: number
+          minimum: 0
+          maximum: 1
+        n:
+          type: integer
+          minimum: 1
+        stream:
+          type: boolean
+          default: false
+        max_completion_tokens:
+          type: integer
+        max_tokens:
+          type: integer
+        presence_penalty:
+          type: number
+          minimum: -2
+          maximum: 2
+        frequency_penalty:
+          type: number
+          minimum: -2
+          maximum: 2
+        logprobs:
+          type: boolean
+        top_logprobs:
+          type: integer
+        stop:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatTool"
+        tool_choice:
+          oneOf:
+            - type: string
+              enum: [none, auto, required]
+            - type: object
+        response_format:
+          oneOf:
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum: [json_object]
+            - type: object
+              properties:
+                type:
+                  type: string
+                  enum: [json_schema]
+                json_schema:
+                  type: object
+        modalities:
+          type: array
+          items:
+            type: string
+            enum: [text, audio]
+        audio:
+          type: object
+        reasoning_effort:
+          type: string
+          enum: [none, minimal, low, medium, high, xhigh]
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        seed:
+          type: number
+        top_k:
+          type: integer
+          description: Number of retrieval results to fetch (passed to retrieval API)
+
+    ChatMessage:
+      oneOf:
+        - $ref: "#/components/schemas/SystemMessage"
+        - $ref: "#/components/schemas/DeveloperMessage"
+        - $ref: "#/components/schemas/UserMessage"
+        - $ref: "#/components/schemas/AssistantMessage"
+        - $ref: "#/components/schemas/ToolMessage"
+        - $ref: "#/components/schemas/ContextMessage"
+
+    SystemMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system]
+        content:
+          type: string
+
+    DeveloperMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [developer]
+        content:
+          type: string
+
+    UserMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user]
+        content:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [text]
+                  text:
+                    type: string
+
+    AssistantMessage:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [assistant]
+        content:
+          type: string
+        tool_calls:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+              function:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  arguments:
+                    type: string
+
+    ToolMessage:
+      type: object
+      required: [role, content, tool_call_id]
+      properties:
+        role:
+          type: string
+          enum: [tool]
+        content:
+          type: string
+        tool_call_id:
+          type: string
+
+    ContextMessage:
+      type: object
+      required: [role, content]
+      description: Injected retrieval context message
+      properties:
+        role:
+          type: string
+          enum: [context]
+        content:
+          type: string
+          description: JSON string containing retrieval query and results
+
+    ChatTool:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [function]
+        function:
+          type: object
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            parameters:
+              type: object
+
+    ChatCompletion:
+      type: object
+      required: [id, object, created, model, choices]
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [chat.completion]
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                type: object
+                properties:
+                  role:
+                    type: string
+                  content:
+                    type: string
+                  refusal:
+                    type: string
+                  tool_calls:
+                    type: array
+              finish_reason:
+                type: string
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            completion_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+
+    ChatCompletionChunk:
+      type: object
+      description: Streamed delta when stream=true
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              delta:
+                type: object
+                properties:
+                  role:
+                    type: string
+                  content:
+                    type: string
+              finish_reason:
+                type: string
+                nullable: true
+        usage:
+          type: object
+
+    ModelList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Model"
+
+    Model:
+      type: object
+      required: [id, object, created, owned_by]
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [model]
+        created:
+          type: integer
+        owned_by:
+          type: string

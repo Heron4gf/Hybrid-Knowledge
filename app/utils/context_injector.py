@@ -93,3 +93,4 @@ def extract_query_from_messages(messages: List[Dict[str, Any]]) -> str:
                 for part in content:
                     if isinstance(part, dict) and part.get("type") == "text":
                         return part.get("text", "").strip()
+    return ""

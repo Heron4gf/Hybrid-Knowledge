@@ -55,8 +55,8 @@ async def query_retrieval(
             )
 
 
-@router.post("/chat/completions")
-async def create_chat_completion(request: Request) -> StreamingResponse | Dict[str, Any]:
+@router.post("/chat/completions", response_model=None)
+async def create_chat_completion(request: Request):
     """Create a chat completion with retrieval-augmented context injection.
     
     1. Extracts query from the last user message
