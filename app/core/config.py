@@ -1,6 +1,5 @@
 """Configuration management for the chatbot proxy."""
 import os
-from functools import lru_cache
 from typing import Optional
 
 from pydantic_settings import BaseSettings
@@ -19,7 +18,6 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 
-@lru_cache
 def get_settings() -> Settings:
-    """Get cached settings instance."""
+    """Get settings instance, always reading from environment."""
     return Settings()
