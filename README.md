@@ -14,7 +14,8 @@ It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automati
 
 ## Demo
 
-[images\knowledgeplatform-demo.mp4]()
+<video src="images/knowledgeplatform-demo.mp4" controls="controls" style="max-width: 100%;">
+</video>
 
 ---
 
