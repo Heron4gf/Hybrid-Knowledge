@@ -14,8 +14,12 @@ It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automati
 
 ## Demo
 
-<video src="images/knowledgeplatform-demo.mp4" controls="controls" style="max-width: 100%;">
-</video>
+[![Watch the video](https://img.youtube.com/vi/AyAwKCK3sQM/0.jpg)](https://www.youtube.com/watch?v=AyAwKCK3sQM)
+
+
+<a href="https://www.youtube.com/watch?v=AyAwKCK3sQM">
+  <img src="https://img.youtube.com/vi/AyAwKCK3sQM/0.jpg" alt="Watch the video" style="width:100%;">
+</a>
 
 ---
 
