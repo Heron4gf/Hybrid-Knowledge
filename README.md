@@ -14,7 +14,7 @@ It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automati
 
 ## Demo
 
-[images/knowledgeplatform-demo]()
+[images\knowledgeplatform-demo.mp4]()
 
 ---
 
