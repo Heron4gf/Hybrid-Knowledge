@@ -2,7 +2,7 @@
 
 This project is part of the [KI-4-KMU initiative](https://www.ki-zentrum.ch/2025/07/03/fhnw-ki-praxisleitfaden-und-ki-canvas-ki-4-kmu-methode/) developed at FHNW, which provides SMEs with practical AI tools and methodologies.
 
-It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automatically injecting retrieved context from the [KI4KMU-IngestionLayer](https://www.google.com/search?q=https://github.com/Heron4gf/KI4KMU-IngestionLayer) into your prompts. This enables document-grounded question answering (RAG) using domain-specific knowledge. The system also launches an integrated [Open WebUI]() container, providing a professional chat interface accessible at `http://localhost:3000` immediately after startup.
+It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automatically injecting retrieved context from the [KI4KMU-IngestionLayer](https://github.com/Heron4gf/KI4KMU-IngestionLayer) into your prompts. This enables document-grounded question answering (RAG) using domain-specific knowledge. The system also launches an integrated [Open WebUI](https://docs.openwebui.com/) container, providing a professional chat interface accessible at `http://localhost:3000` immediately after startup.
 
 ## Features
 
@@ -14,7 +14,7 @@ It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automati
 
 ## Demo
 
-[https://github.com/user-attachments/assets/demo-video-placeholder]()
+[images/knowledgeplatform-demo]()
 
 ---
 
