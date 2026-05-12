@@ -14,7 +14,7 @@ It acts as a **proxy server** that exposes OpenAI-compatible endpoints, automati
 
 ## Demo
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/AyAwKCK3sQM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+https://github.com/user-attachments/assets/bccc3a42-1289-45b5-bfd3-5e9b4702c49c
 
 ---
 
